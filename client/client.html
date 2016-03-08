@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+		var socket;
+
+    var canvas;
+    var ctx;
+
+    var myScoreElement;
+    var scoreboardDiv;
+
+    var userNumber = Math.floor((Math.random() * 100) + 1);
+
+    var square = {
+      userID: 1,
+      score: 0,
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50
+    };
+
+    var objective = {
+      userID: 0,
+      x: 0,
+      y: 0,
+      width: 150,
+      height: 150
+    }
+
+    function Draw(allSquares) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      var keys = Object.keys(allSquares);
+      for (var i = 0; i < keys.length; i++) {
+        var drawCall = allSquares[keys[i]];
+        if(keys[i] == 0) {
+          objective = drawCall;
+          ctx.fillStyle = 'red';
+          ctx.fillRect(drawCall.x, drawCall.y, drawCall.width, drawCall.height);
+        }
+        else {
+          ctx.fillStyle = 'blue';
+          ctx.fillRect(drawCall.x, drawCall.y, drawCall.width, drawCall.height);
+        }
+      }
+    }
+
+    function checkObjective() {
+      if (square.x < objective.x + objective.width &&
+        square.x + square.width > objective.x &&
+        square.y < objective.y + objective.height &&
+        square.height + square.y > objective.y) {
+        objective = {
+          userID: 0,
+          x: (Math.floor(Math.random() * 500) + 1),
+          y: (Math.floor(Math.random() * 500) + 1),
+          width: 150,
+          height: 150
+        }
+        square.score = square.score + 1;
+        socket.emit('updateScore', { newObj: objective, newScore: square });
+      }
+    }
+
+    function moveRect(e) {
+      switch(e.keyCode) {
+        case 87:
+          // W
+          square.y = square.y - 10;
+          console.log('W');
+          break;
+        case 65:
+          // A
+          square.x = square.x - 10;
+          console.log('A');
+          break;
+        case 83:
+          // S
+          square.y = square.y + 10;
+          console.log('S');
+          break;
+        case 68:
+          // D
+          square.x = square.x + 10;
+          console.log('D');
+          break;
+      }
+      checkObjective();
+      socket.emit('updateRect', square);
+    }
+
+    function removeOldScores() {
+      var allParagraphs = document.getElementsByTagName('p');
+      console.log(allParagraphs.length);
+      for (var i = 0; i < allParagraphs.length; i++) {
+        if(allParagraphs[i].id != 'myScore') {
+          allParagraphs[i].parentNode.removeChild(allParagraphs[i]);
+          console.log('paragraph removed');
+        }
+      }
+    }
+
+    function UpdateScoreboard(allScores) {
+      removeOldScores();
+      var keys = Object.keys(allScores);
+      for (var i = 0; i < keys.length; i++) {
+        var score = allScores[keys[i]];
+        if (keys[i] == square.userID) {
+          myScoreElement.innerHTML = 'My Score: ' + score;
+        }
+        else {
+          var newScore = document.createElement("p");
+          var newScoreText = document.createTextNode('Opponent Score: ' + score);
+          newScore.appendChild(newScoreText);
+
+          scoreboardDiv.appendChild(newScore);
+        }
+      }
+    }
+
+    function init() {
+      canvas = document.querySelector("#canvas");
+      ctx = canvas.getContext("2d");
+
+      myScoreElement = document.querySelector('#myScore');
+      scoreboardDiv = document.querySelector('#scoreboard');
+      removeOldScores();
+
+      window.addEventListener('keydown', moveRect, false);
+
+      socket = io.connect();
+
+			socket.on('connect', function () {
+				// Create Random square
+        square = {
+          userID: userNumber,
+          score: 0,
+          x: (Math.floor(Math.random() * 500) + 1),
+          y: (Math.floor(Math.random() * 500) + 1),
+          width: 50,
+          height: 50
+        };
+
+        objective = {
+          userID: 0,
+          x: (Math.floor(Math.random() * 500) + 1),
+          y: (Math.floor(Math.random() * 500) + 1),
+          width: 150,
+          height: 150
+        }
+        socket.emit('newRect', { userRect: square, newObjective: objective });
+			});
+
+			socket.on('updateCanvas', function(data) {
+				// Draw method
+        UpdateScoreboard(data.scores);
+        Draw(data.squares);
+			});
+
+      socket.on('disconnect', function() {
+        socket.emit('disconnect', square);
+      });
+    }
+
+    window.onload = init;
+  </script>
+</head>
+<body>
+  <div id='scoreboard'>
+    <p id='myScore'>My Score: </p>
+  </div>
+  <canvas id="canvas" height="600" width="800" style="border: 1px solid black">Please use an HTML 5 browser</canvas>
+</body>
+</html>
